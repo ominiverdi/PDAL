@@ -38,6 +38,9 @@
 #include <arbiter/arbiter.hpp>
 #include <pdal/util/FileUtils.hpp>
 #include <pdal/pdal_types.hpp>
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 namespace pdal
 {
@@ -67,59 +70,125 @@ namespace stac
 
 namespace StacUtils
 {
+    using namespace rapidjson;
 
     std::string handleRelativePath(std::string srcPath, std::string linkPath);
     std::time_t getStacTime(std::string in);
-    const std::string &stacId(const NL::json& stac);
-    const std::string &stacType(const NL::json& stac);
-    const std::string &icSelfPath(const NL::json& json);
+    const std::string &stacId(const rapidjson::Document& stac);
+    const std::string &stacType(const rapidjson::Document& stac);
+    const std::string &icSelfPath(const rapidjson::Document& json);
+
+    template <class S = rapidjson::Value::Object>
+    const S jsonValue(const Value& stac, std::string key = "")
+    {
+        if (key.empty())
+            return stac.Get<S>();
+
+        const GenericMemberIterator vit = stac.FindMember(key);
+        if (vit == stac.MemberEnd())
+            throw pdal_error("Missing key '"+key+"' in object: " + stac.GetString());
+        try
+        {
+            return vit->value.Get<S>();
+        }
+        catch (const std::exception &e)
+        {
+            throw stac_error(e.what());
+        }
+
+    }
 
     template <class T = NL::json::object_t>
     inline const T &jsonValue(const NL::json& json, std::string key = "")
     {
+        if (key.empty())
+            return stac.Get<T>();
+
+        const auto vit = stac.FindMember(key)
+        if (vit == stac.MemberEnd())
+            throw pdal_error("Missing key '"+key+"' in object: " + stac.GetString());
         try
         {
-            if (key.empty())
-                return json.get_ref<const T &>();
-            return json.at(key).get_ref<const T &>();
+            return stac[key].Get<T>();
         }
-        catch (NL::detail::exception& e)
+        catch (const std::exception &e)
         {
-            std::stringstream msg;
-            msg << "Error: " << e.what() << ", for object " << json.dump();
-            throw pdal_error(msg.str());
+            throw stac_error(e.what());
         }
     }
 
-    template <class U = NL::json::object_t>
-    inline const U &stacValue(const NL::json& stac, std::string key = "",
-        const NL::json& rootJson = {})
+    template <typename AddType>
+    void addMember(Value& obj, std::string name, AddType& v, Document::AllocatorType& al)
     {
+        if (typeid(v) == typeid(std::string))
+        {
+            Value key(name.c_str(), name.size(), al);
+            Value val(v.c_str(), v.size(), al);
+            obj.AddMember(key, val, al);
+        }
+        else
+        {
+            Value key(name.c_str(), name.size(), al);
+            Value val(v, v.size(), al);
+            obj.AddMember(key, val, al);
+        }
 
-        try
-        {
-            if (key.empty())
-                return stac.get_ref<const U &>();
-            return stac.at(key).get_ref<const U &>();
-        }
-        catch (NL::detail::exception& e)
-        {
-            try {
-                NL::json stacCheck = stac;
-                if (!rootJson.empty())
-                    stacCheck = rootJson;
-                const std::string type = stacType(stacCheck);
-                if (type == "FeatureCollection")
-                    throw stac_error(icSelfPath(stacCheck), type, e.what());
-                else
-                    throw stac_error(stacId(stacCheck), type, e.what());
-            }
-            catch (std::exception& )
-            {
-                throw stac_error(e.what());
-            }
-        }
     }
+
+    void addMember(Value& obj, std::string name, std::string& v, Document::AllocatorType& al)
+    {
+        Value key(name.c_str(), name.size(), al);
+        Value val(v.c_str(), v.size(), al);
+        obj.AddMember(key, val, al);
+    }
+
+    // template <class U = NL::json::object_t>
+    // inline const U &stacValue(const NL::json& stac, std::string key = "",
+    //     const NL::json& rootJson = {})
+    // {
+
+    //     try
+    //     {
+    //         if (key.empty())
+    //             return stac.get_ref<const U &>();
+    //         return stac.at(key).get_ref<const U &>();
+    //     }
+    //     catch (NL::detail::exception& e)
+    //     {
+    //         try {
+    //             NL::json stacCheck = stac;
+    //             if (!rootJson.empty())
+    //                 stacCheck = rootJson;
+    //             const std::string type = stacType(stacCheck);
+    //             if (type == "FeatureCollection")
+    //                 throw stac_error(icSelfPath(stacCheck), type, e.what());
+    //             else
+    //                 throw stac_error(stacId(stacCheck), type, e.what());
+    //         }
+    //         catch (std::exception& )
+    //         {
+    //             throw stac_error(e.what());
+    //         }
+    //     }
+    // }
+
+    // template <class U = rapidjson::Value::Object>
+    // const U stacValue(const Value& stac, std::string key = "",
+    //     const Document& rootJson = {})
+    // {
+    //     try
+    //     {
+    //         if (key.empty())
+    //             return stac[key].Get<U>();
+    //         return stac[key].Get<U>();
+    //     }
+    //     catch (const std::exception &e)
+    //     {
+    //         throw stac_error(e.what());
+    //     }
+
+    // }
+
 
 }// StacUtils
 }// stac

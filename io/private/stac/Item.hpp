@@ -61,7 +61,7 @@ class Item
 {
 
 public:
-    Item(const NL::json& json,
+    Item(const rapidjson::Document& json,
         const std::string& itemPath,
         const connector::Connector& connector,
         bool validate);
@@ -79,7 +79,7 @@ public:
         std::vector<RegEx> collections;
     };
 
-    bool init(const Filters& filters, NL::json rawReaderArgs, SchemaUrls schemaUrls);
+    bool init(const Filters& filters, rapidjson::Value& readerArgs, SchemaUrls schemaUrls);
 
     std::string id();
     const std::string driver();
@@ -88,7 +88,7 @@ public:
 
 private:
 
-    const NL::json& m_json;
+    const rapidjson::Document& m_json;
     const std::string m_path;
 
     const connector::Connector& m_connector;
@@ -101,10 +101,14 @@ private:
     std::string m_assetPath;
     std::string m_id;
 
-    std::string extractDriverFromItem(const NL::json& asset) const;
-    Options setReaderOptions(const NL::json& readerArgs, const std::string& driver) const;
+    struct Properties {
 
-    NL::json handleReaderArgs(NL::json rawReaderArgs);
+    };
+
+    std::string extractDriverFromItem(const rapidjson::Value& asset) const;
+    Options setReaderOptions(const rapidjson::Value& readerArgs, const std::string& driver) const;
+
+    rapidjson::Document handleReaderArgs(rapidjson::Document rawReaderArgs);
     void validate();
 
     bool filter(const Filters& filters);

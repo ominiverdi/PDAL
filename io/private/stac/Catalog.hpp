@@ -53,7 +53,7 @@ class Catalog
 {
 
 public:
-    Catalog(const NL::json& json,
+    Catalog(const rapidjson::Document& json,
         const std::string& catPath,
         const connector::Connector& connector,
         ThreadPool& pool,
@@ -72,7 +72,7 @@ public:
     ErrorList errors();
     GroupType type();
 
-    bool init(const Filters& filters, NL::json rawReaderArgs, SchemaUrls schemaUrls,
+    bool init(const Filters& filters, rapidjson::Value& readerArgs, SchemaUrls schemaUrls,
             bool isRoot);
     bool filter(Filters filters);
 
@@ -80,7 +80,7 @@ public:
 
 protected:
 
-    const NL::json m_json;
+    const rapidjson::Document& m_json;
     const std::string m_path;
     const connector::Connector& m_connector;
     std::mutex m_mutex;
@@ -99,9 +99,9 @@ protected:
 
     void hoistNested();
     void collectErrors();
-    void handleItem(const Item::Filters& f, NL::json readerArgs, std::string path);
-    void handleCat(const Filters& f, NL::json readerArgs, std::string path);
-    void handleCol(const Filters& f, NL::json readerArgs, std::string path);
+    void handleItem(const Item::Filters& f, rapidjson::Value& readerArgs, std::string path);
+    void handleCat(const Filters& f, rapidjson::Value& readerArgs, std::string path);
+    void handleCol(const Filters& f, rapidjson::Value& readerArgs, std::string path);
 
 };
 

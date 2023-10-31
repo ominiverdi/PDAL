@@ -77,7 +77,7 @@ class PDAL_DLL StacReader : public Reader, public Streamable
         void printErrors(stac::Catalog& c);
         void handleNested(stac::Catalog& c);
         void addItem(stac::Item& item);
-        void handleItem(NL::json stacJson, std::string itemPath);
+        void handleItem(const rapidjson::Document& stacJson, std::string itemPath);
         void handleCatalog(NL::json stacJson, std::string catPath);
         void handleCollection(NL::json stacJson, std::string colPath);
         void handleItemCollection(NL::json stacJson, std::string icPath);

@@ -46,7 +46,7 @@ namespace stac
 
 using namespace StacUtils;
 
-Item::Item(const NL::json& json,
+Item::Item(const rapidjson::Document& json,
         const std::string& itemPath,
         const connector::Connector& connector,
         bool validate):
@@ -57,13 +57,7 @@ Item::Item(const NL::json& json,
 Item::~Item()
 {}
 
-// Item::Item(const Item& item):
-//     m_json(item.m_json), m_path(item.m_path), m_connector(item.m_connector),
-//     m_driver(item.m_driver), m_schemaUrls(item.m_schemaUrls),
-//     m_readerOptions(item.m_readerOptions)
-// {}
-
-bool Item::init(const Filters& filters, NL::json rawReaderArgs,
+bool Item::init(const Filters& filters, rapidjson::Value& readerArgs,
         SchemaUrls schemaUrls)
 {
 
@@ -71,11 +65,10 @@ bool Item::init(const Filters& filters, NL::json rawReaderArgs,
         return false;
 
     m_schemaUrls = schemaUrls;
-    if (m_validate)
-        validate();
+    // if (m_validate)
+    //     validate();
 
 
-    NL::json readerArgs = handleReaderArgs(rawReaderArgs);
     m_readerOptions = setReaderOptions(readerArgs, m_driver);
     m_readerOptions.add("filename", m_assetPath);
     return true;
@@ -101,61 +94,29 @@ Options Item::options()
     return m_readerOptions;
 }
 
-NL::json Item::handleReaderArgs(NL::json rawReaderArgs)
-{
-    if (rawReaderArgs.is_object())
-    {
-        NL::json array_args = NL::json::array();
-        array_args.push_back(rawReaderArgs);
-        rawReaderArgs = array_args;
-    }
-    for (auto& opts: rawReaderArgs)
-        if (!opts.is_object())
-            throw pdal_error("Reader Args for reader '" + m_driver +
-                "' must be a valid JSON object");
 
-    NL::json readerArgs;
-    for (const NL::json& readerPipeline: rawReaderArgs)
-    {
-        const std::string &driver =
-            jsonValue<std::string>(readerPipeline, "type");
-        if (rawReaderArgs.contains(driver))
-            throw pdal_error("Multiple instances of the same driver in"
-                " supplied reader arguments.");
-        readerArgs[driver] = { };
-
-        for (auto& arg: readerPipeline.items())
-        {
-            if (arg.key() == "type")
-                continue;
-
-            std::string key = arg.key();
-            readerArgs[driver][key] = { };
-            readerArgs[driver][key] = arg.value();
-        }
-    }
-    return readerArgs;
-}
-
-Options Item::setReaderOptions(const NL::json& readerArgs,
+Options Item::setReaderOptions(const rapidjson::Value& readerArgs,
     const std::string& driver) const
 {
     Options readerOptions;
-    if (readerArgs.contains(driver)) {
-        const NL::json &args = jsonValue(readerArgs, driver);
-        for (auto& arg : args.items())
+    if (readerArgs.HasMember(driver.c_str())) {
+        const rapidjson::Value &args = jsonValue(readerArgs, driver);
+        for (auto & arg: args.GetObject())
         {
-            std::string key = arg.key();
-            NL::json val = arg.value();
-            NL::detail::value_t type = val.type();
+
+            std::string key = arg.name.GetString();
+            auto& val = arg.value;
 
             // if value is of type string, dump() returns string with
             // escaped string inside and kills pdal program args
             // std::string v;
-            if (type == NL::detail::value_t::string)
-                readerOptions.add(key, &jsonValue<std::string>(val));
+            if (val.IsString())
+            {
+                auto v = val.GetString();
+                readerOptions.add(key, val.GetString());
+            }
             else
-                readerOptions.add(key, arg.value().dump());
+                readerOptions.add(key, val.GetString());
             // readerOptions.add(key, v);
         }
     }
@@ -163,7 +124,7 @@ Options Item::setReaderOptions(const NL::json& readerArgs,
     return readerOptions;
 }
 
-std::string Item::extractDriverFromItem(const NL::json& asset) const
+std::string Item::extractDriverFromItem(const rapidjson::Value& asset) const
 {
     std::string output;
 
@@ -172,13 +133,12 @@ std::string Item::extractDriverFromItem(const NL::json& asset) const
         { "application/vnd.laszip+copc", "readers.copc"}
     };
 
-    const std::string &assetPath = stacValue<std::string>(
-        asset, "href", m_json);
+    const std::string &assetPath = jsonValue<std::string>(asset, "href");
     std::string dataUrl = handleRelativePath(m_path, assetPath);
 
-    if (asset.contains("type"))
+    if (asset.HasMember("type"))
     {
-        const std::string &contentType = stacValue<std::string>(asset, "type", m_json);
+        const std::string &contentType = jsonValue<std::string>(asset, "type");
         for(const auto& ct: contentTypes)
             if (Utils::iequals(ct.first, contentType))
                 return ct.second;
@@ -214,97 +174,97 @@ std::string Item::extractDriverFromItem(const NL::json& asset) const
     return output;
 }
 
-void Item::validate()
+// void Item::validate()
+// {
+
+//     nlohmann::json_schema::json_validator val(
+//         [this](const nlohmann::json_uri& json_uri, nlohmann::json& json) {
+//             json = m_connector.getJson(json_uri.url());
+//         },
+//         [](const std::string &, const std::string &) {}
+//     );
+
+//     // Validate against base Item schema first
+//     rapidjson::Document schemaJson = m_connector.getJson(m_schemaUrls.item);
+//     val.set_root_schema(schemaJson);
+//     try {
+//         val.validate(m_json);
+//     }
+//     catch (std::exception &e)
+//     {
+//         throw stac_error(m_id, "item",
+//             "STAC schema validation Error in root schema: " +
+//             m_schemaUrls.item + ". \n\n" + e.what());
+//     }
+
+//     // Validate against stac extensions if present
+//     if (m_json.contains("stac_extensions"))
+//     {
+//         const rapidjson::Document &extensions = stacValue(m_json, "stac_extensions");
+//         for (auto& extSchemaUrl: extensions)
+//         {
+//             const std::string &url = stacValue<std::string>(extSchemaUrl, "", m_json);
+
+//             try {
+//                 rapidjson::Document schemaJson = m_connector.getJson(url);
+//                 val.set_root_schema(schemaJson);
+//                 val.validate(m_json);
+//             }
+//             catch (std::exception& e) {
+//                 std::string msg  =
+//                     "STAC Validation Error in extension: " + url +
+//                     ". Errors found: \n" + e.what();
+//                 throw stac_error(m_id, "item", msg);
+
+//             }
+//         }
+//     }
+// }
+
+void validateForFilter(const rapidjson::Document &json)
 {
-
-    nlohmann::json_schema::json_validator val(
-        [this](const nlohmann::json_uri& json_uri, nlohmann::json& json) {
-            json = m_connector.getJson(json_uri.url());
-        },
-        [](const std::string &, const std::string &) {}
-    );
-
-    // Validate against base Item schema first
-    NL::json schemaJson = m_connector.getJson(m_schemaUrls.item);
-    val.set_root_schema(schemaJson);
-    try {
-        val.validate(m_json);
-    }
-    catch (std::exception &e)
-    {
-        throw stac_error(m_id, "item",
-            "STAC schema validation Error in root schema: " +
-            m_schemaUrls.item + ". \n\n" + e.what());
-    }
-
-    // Validate against stac extensions if present
-    if (m_json.contains("stac_extensions"))
-    {
-        const NL::json &extensions = stacValue(m_json, "stac_extensions");
-        for (auto& extSchemaUrl: extensions)
-        {
-            const std::string &url = stacValue<std::string>(extSchemaUrl, "", m_json);
-
-            try {
-                NL::json schemaJson = m_connector.getJson(url);
-                val.set_root_schema(schemaJson);
-                val.validate(m_json);
-            }
-            catch (std::exception& e) {
-                std::string msg  =
-                    "STAC Validation Error in extension: " + url +
-                    ". Errors found: \n" + e.what();
-                throw stac_error(m_id, "item", msg);
-
-            }
-        }
-    }
+    // stacId(json);
+    jsonValue(json, "assets");
+    jsonValue(json, "properties");
+    jsonValue(json, "geometry");
 }
 
-void validateForFilter(const NL::json &json)
-{
-    stacId(json);
-    stacValue(json, "assets");
-    stacValue(json, "properties");
-    stacValue(json, "geometry");
-}
-
-bool matchProperty(std::string key, NL::json val, const NL::json &properties,
+bool matchProperty(std::string key, NL::json val, const Value &stacVal,
     NL::detail::value_t type)
 {
     switch (type)
     {
         case NL::detail::value_t::string:
         {
+            const std::string &value = jsonValue<std::string>(stacVal);
             const std::string &desired = jsonValue<std::string>(val);
-            const std::string &value = jsonValue<std::string>(properties, key);
             return value == desired;
             break;
         }
         case NL::detail::value_t::number_unsigned:
         {
-            const uint64_t &value = jsonValue<uint64_t>(properties, key);
+            const uint64_t &value = jsonValue<uint64_t>(stacVal);
             const uint64_t &desired = jsonValue<uint64_t>(val);
             return value == desired;
             break;
         }
         case NL::detail::value_t::number_integer:
         {
-            const int &value = jsonValue<int64_t>(properties, key);
+            const int &value = jsonValue<int64_t>(stacVal);
             const int &desired = jsonValue<int64_t>(val);
             return value == desired;
             break;
         }
         case NL::detail::value_t::number_float:
         {
-            const double &value = jsonValue<double>(properties, key);
+            const double &value = jsonValue<double>(stacVal);
             const double &desired = jsonValue<double>(val);
             return value == desired;
             break;
         }
         case NL::detail::value_t::boolean:
         {
-            const bool &value = jsonValue<bool>(properties, key);
+            const bool &value = jsonValue<bool>(stacVal);
             const bool &desired = jsonValue<bool>(val);
             return value == desired;
             break;
@@ -356,28 +316,29 @@ bool Item::filterBounds(BOX3D bounds, SpatialReference srs)
     //more descriptive than bbox
     Polygon stacPolygon;
     const SpatialReference stacSrs("EPSG:4326");
-    if (m_json.find("bbox") != m_json.end())
+    auto bbox = m_json.FindMember("bbox");
+    if (bbox != m_json.MemberEnd())
     {
-        const auto& edges = stacValue<NL::json::array_t>(m_json, "bbox");
-        if (edges.size() == 4)
+        const auto& edges = bbox->value.GetArray();
+        if (edges.Size() == 4)
         {
             const BOX3D stacbox(BOX2D(
-                edges[0].get_ref<const double&>(),
-                edges[1].get_ref<const double&>(),
-                edges[2].get_ref<const double&>(),
-                edges[3].get_ref<const double&>()
+                edges[0].GetDouble(),
+                edges[1].GetDouble(),
+                edges[2].GetDouble(),
+                edges[3].GetDouble()
             ));
             stacPolygon = Polygon(stacbox);
         }
-        else if (edges.size() == 6)
+        else if (edges.Size() == 6)
         {
             const BOX3D stacbox(
-                edges[0].get_ref<const double&>(),
-                edges[1].get_ref<const double&>(),
-                edges[2].get_ref<const double&>(),
-                edges[3].get_ref<const double&>(),
-                edges[4].get_ref<const double&>(),
-                edges[5].get_ref<const double&>()
+                edges[0].GetDouble(),
+                edges[1].GetDouble(),
+                edges[2].GetDouble(),
+                edges[3].GetDouble(),
+                edges[4].GetDouble(),
+                edges[5].GetDouble()
             );
             stacPolygon = Polygon(stacbox);
         }
@@ -388,13 +349,12 @@ bool Item::filterBounds(BOX3D bounds, SpatialReference srs)
     {
         //If stac item has null geometry and bounds have been included
         //for filtering, then the Item will be excluded.
-        const NL::json& geometry = stacValue(m_json, "geometry");
-        std::string g = geometry.dump();
+        const std::string geometry = jsonValue<std::string>(m_json, "geometry");
         // if (geometry.type() == NL::detail::value_t::null)
         //     return false;
 
         //STAC's base geometries will always be represented in 4326.
-        Polygon stacPolygon(g, stacSrs);
+        Polygon stacPolygon(geometry, stacSrs);
         if (!stacPolygon.valid())
             throw stac_error(m_id, "item",
                 "Polygon created from STAC 'geometry' key is invalid");
@@ -423,14 +383,16 @@ bool Item::filterBounds(BOX3D bounds, SpatialReference srs)
 
 bool Item::filterProperties(const NL::json& filterProps)
 {
-    const NL::json &itemProperties = stacValue(m_json, "properties");
+    const Value itemProperties = jsonValue<Value>(m_json, "properties");
+
     if (!filterProps.empty())
     {
         for (auto &it: filterProps.items())
         {
             std::string key = it.key();
-            const NL::json &stacVal = stacValue(itemProperties, key, m_json);
-            NL::detail::value_t stacType = stacVal.type();
+
+            // itemProperties[key].Get<Value>();
+            const Value stacVal = jsonValue<Value>(itemProperties, key);
 
             NL::json filterVal = it.value();
             NL::detail::value_t filterType = filterVal.type();
@@ -440,11 +402,11 @@ bool Item::filterProperties(const NL::json& filterProps)
             {
                 bool arrFlag (true);
                 for (auto& val: filterVal)
-                    if (matchProperty(key, val, itemProperties, stacType))
+                    if (matchProperty(key, val, stacVal, filterType))
                         return true;
             }
             else
-                if (matchProperty(key, filterVal, itemProperties, stacType))
+                if (matchProperty(key, filterVal, stacVal, filterType))
                     return true;
         }
 
@@ -455,18 +417,17 @@ bool Item::filterProperties(const NL::json& filterProps)
 
 bool Item::filterDates(DatePairs dates)
 {
-    const NL::json &properties = stacValue(m_json, "properties");
+    const Value &properties = jsonValue(m_json, "properties");
 
     // DateTime
     // If STAC datetime fits in *any* of the supplied ranges,
     // it will be accepted.
     if (!dates.empty())
     {
-        if (properties.contains("datetime") &&
-            properties.at("datetime").type() != NL::detail::value_t::null)
+        if (properties.HasMember("datetime") &&
+            !properties["datetime"].IsNull())
         {
-            const std::string &stacDateStr = stacValue<std::string>(properties,
-                "datetime", m_json);
+            const std::string stacDateStr = jsonValue<std::string>(properties, "datetime");
 
             try
             {
@@ -482,14 +443,14 @@ bool Item::filterDates(DatePairs dates)
 
             return false;
         }
-        else if (properties.contains("start_datetime") &&
-            properties.contains("end_datetime"))
+        else if (properties.HasMember("start_datetime") &&
+            properties.HasMember("end_datetime"))
         {
                 // Handle if STAC object has start and end datetimes instead of one
-                const std::string &endDateStr = stacValue<std::string>(properties,
-                    "end_datetime", m_json);
-                const std::string &startDateStr = stacValue<std::string>(properties,
-                    "end_datetime", m_json);
+                const std::string endDateStr = jsonValue<std::string>(properties,
+                    "end_datetime");
+                const std::string startDateStr = jsonValue<std::string>(properties,
+                    "end_datetime");
 
                 std::time_t stacEndTime = getStacTime(endDateStr);
                 std::time_t stacStartTime = getStacTime(startDateStr);
@@ -519,14 +480,14 @@ bool Item::filterDates(DatePairs dates)
 
 bool Item::filterAssets(std::vector<std::string> assetNames)
 {
-    const NL::json &assetList = stacValue(m_json, "assets");
+    const rapidjson::Value assetList = jsonValue<Value>(m_json, "assets");
     for (auto& name: assetNames)
     {
-        if (assetList.contains(name))
+        if (assetList.HasMember(name.c_str()))
         {
-            const NL::json &asset = stacValue(assetList, name, m_json);
+            const rapidjson::Value asset = jsonValue<Value>(assetList, name);
             m_driver = extractDriverFromItem(asset);
-            const std::string &assetPath = stacValue<std::string>(asset, "href", m_json);
+            const std::string assetPath = jsonValue<std::string>(asset, "href");
             m_assetPath = handleRelativePath(m_path, assetPath);
         }
     }
@@ -552,11 +513,10 @@ bool Item::filterCol(std::vector<RegEx> ids)
 {
     if (!ids.empty())
     {
-        if (!m_json.contains("collection"))
+        if (!m_json.HasMember("collection"))
             return false;
 
-        const std::string &colId = stacValue<std::string>(
-            m_json, "collection");
+        const std::string colId = jsonValue<std::string>(m_json, "collection");
         for (auto& id: ids)
             if (std::regex_match(colId, id.regex()))
                 return true;

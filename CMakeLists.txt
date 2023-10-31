@@ -121,6 +121,7 @@ include(${PDAL_CMAKE_DIR}/libxml2.cmake)
 include(${PDAL_CMAKE_DIR}/dimension.cmake)
 include(${PDAL_CMAKE_DIR}/arbiter.cmake)
 include(${PDAL_CMAKE_DIR}/nlohmann.cmake)
+include(${PDAL_CMAKE_DIR}/rapidjson.cmake)
 include(${PDAL_CMAKE_DIR}/schema-validator.cmake)
 include(${PDAL_CMAKE_DIR}/lazperf.cmake)
 include(${PDAL_CMAKE_DIR}/openssl.cmake) # Optional

@@ -79,43 +79,28 @@ std::time_t getStacTime(std::string in)
     return std::mktime(&date);
 }
 
-const std::string &stacId(const NL::json& stac)
+const std::string &stacId(const rapidjson::Document& stac)
 {
-    std::stringstream msg;
-    try
-    {
-        return stac.at("id").get_ref<const std::string &>();
-    }
-    catch (NL::detail::out_of_range& e)
-    {
-        msg << "Missing required key 'id'. " << e.what();
-        throw pdal_error(msg.str());
-    }
-    catch (NL::detail::type_error& e)
-    {
-        msg << "Required key 'id' is not of type 'string'. " << e.what();
-        throw pdal_error(msg.str());
-    }
+    auto id = stac.FindMember("id");
+
+    if (id == stac.MemberEnd())
+        throw pdal_error("Missing required key 'id'.");
+    if (!id->value.IsString()){}
+        throw pdal_error("Required key 'id' is not of type 'string'. ");
+
+    return id->value.GetString();
 }
 
-const std::string &stacType(const NL::json& stac)
+const std::string &stacType(const rapidjson::Document& stac)
 {
-    try
-    {
-        return stac.at("type").get_ref<const std::string &>();
-    }
-    catch (NL::detail::out_of_range& e)
-    {
-        std::stringstream msg;
-        msg << "Missing required key 'type'. " << e.what();
-        throw pdal_error(msg.str());
-    }
-    catch (NL::detail::type_error& e)
-    {
-        std::stringstream msg;
-        msg << "Invalid key value 'type'. " << e.what();
-        throw pdal_error(msg.str());
-    }
+    auto t = stac.FindMember("type");
+
+    if (t == stac.MemberEnd())
+        throw pdal_error("Missing required key 'type'.");
+    if (!t->value.IsString()){}
+        throw pdal_error("Required key 'type' is not of type 'string'. ");
+
+    return t->value.GetString();
 }
 
 const std::string &icSelfPath(const NL::json& json)
