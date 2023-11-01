@@ -67,7 +67,6 @@ public:
         bool validate);
 
     ~Item();
-    // Item(const Item& item);
 
     struct Filters {
         std::vector<RegEx> ids;
@@ -112,12 +111,12 @@ private:
     void validate();
 
     bool filter(const Filters& filters);
-    bool filterAssets(std::vector<std::string> assetNames);
-    bool filterIds(std::vector<RegEx> ids);
-    bool filterCol(std::vector<RegEx> ids);
-    bool filterDates(DatePairs dates);
+    bool filterAssets(const std::vector<std::string> &assetNames);
+    bool filterIds(const std::vector<RegEx> &ids);
+    bool filterCol(const std::vector<RegEx> &ids);
+    bool filterDates(const DatePairs &dates);
     bool filterProperties(const NL::json& filterProps);
-    bool filterBounds(BOX3D bounds, SpatialReference srs);
+    bool filterBounds(const BOX3D &bounds, const SpatialReference &srs);
 
 
 };

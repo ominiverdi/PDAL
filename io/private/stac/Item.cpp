@@ -320,7 +320,7 @@ bool Item::filter(const Filters& filters)
     return true;
 }
 
-bool Item::filterBounds(BOX3D bounds, SpatialReference srs)
+bool Item::filterBounds(const BOX3D &bounds, const SpatialReference& srs)
 {
     if (bounds.empty())
         return true;
@@ -427,7 +427,7 @@ bool Item::filterProperties(const NL::json& filterProps)
     return true;
 }
 
-bool Item::filterDates(DatePairs dates)
+bool Item::filterDates(const DatePairs &dates)
 {
     const Value &properties = valueAt(m_json, "properties");
 
@@ -490,7 +490,7 @@ bool Item::filterDates(DatePairs dates)
 
 }
 
-bool Item::filterAssets(std::vector<std::string> assetNames)
+bool Item::filterAssets(const std::vector<std::string> &assetNames)
 {
     const rapidjson::Value &assetList = valueAt(m_json, "assets");
     for (auto& name: assetNames)
@@ -509,11 +509,11 @@ bool Item::filterAssets(std::vector<std::string> assetNames)
 }
 
 // If STAC ID matches any ID in supplied list, it will be accepted
-bool Item::filterIds(std::vector<RegEx> ids)
+bool Item::filterIds(const std::vector<RegEx> &ids)
 {
     if (!ids.empty())
     {
-        for (auto& id: ids)
+        for (const auto& id: ids)
             if (std::regex_match(m_id, id.regex()))
                 return true;
         return false;
@@ -521,7 +521,7 @@ bool Item::filterIds(std::vector<RegEx> ids)
     return true;
 }
 
-bool Item::filterCol(std::vector<RegEx> ids)
+bool Item::filterCol(const std::vector<RegEx> &ids)
 {
     if (!ids.empty())
     {
@@ -529,7 +529,7 @@ bool Item::filterCol(std::vector<RegEx> ids)
             return false;
 
         const std::string colId = valueAt(m_json, "collection").GetString();
-        for (auto& id: ids)
+        for (const auto& id: ids)
             if (std::regex_match(colId, id.regex()))
                 return true;
 

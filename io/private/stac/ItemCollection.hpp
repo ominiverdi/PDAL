@@ -35,7 +35,6 @@
 #pragma once
 
 #include "Item.hpp"
-#include <pdal/util/ThreadPool.hpp>
 
 namespace pdal
 {

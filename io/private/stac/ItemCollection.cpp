@@ -42,7 +42,7 @@ namespace stac
 
 using namespace StacUtils;
 
-ItemCollection::ItemCollection(const NL::json& json,
+ItemCollection::ItemCollection(const rapidjson::Value& json,
         const std::string& icPath,
         const connector::Connector& connector,
         bool validate):
@@ -62,7 +62,7 @@ const ItemList& ItemCollection::items()
 bool ItemCollection::init(const Filters& filters, rapidjson::Value& readerArgs,
     SchemaUrls schemaUrls)
 {
-    const Value::Array itemList = jsonValue<Value::Array>(m_json, "features");
+    const ConstArrayType itemList = jsonValue<ConstArrayType>(m_json, "features");
     for (const Value& itemJson: itemList)
     {
         std::shared_ptr<Item> item(new Item(itemJson, m_path, m_connector, m_validate));
@@ -73,20 +73,24 @@ bool ItemCollection::init(const Filters& filters, rapidjson::Value& readerArgs,
             m_itemList.push_back(item);
         }
     }
-    auto lit = m_json.findMember("links");
-    if (lit != )
+    const Value::ConstMemberIterator lit = m_json.FindMember("links");
+    if (lit != m_json.MemberEnd())
     {
-        const Value &links = valueAt(m_json, "links");
-        for (const NL::json& link: links)
+        if (!lit->value.IsArray())
+            throw stac_error("Links in FeatureCollection must be an array.");
+        for (auto& link: lit->value.GetArray())
         {
-            const std::string &target = jsonValue<std::string>(link, "rel");
-            if (target == "next")
+            const char* target = valueAt(link, "rel").GetString();
+            if (strcmp(target, "next") == 0)
             {
-                const std::string &nextLinkPath = jsonValue<std::string>(
-                    link, "href");
+                const char* nextLinkPath = valueAt(link, "href").GetString();
                 std::string nextAbsPath =
                     handleRelativePath(m_path, nextLinkPath);
-                NL::json nextJson = m_connector.getJson(nextAbsPath);
+                std::vector<char> bin = m_connector.getBinary(nextAbsPath);
+
+                const char* buf = reinterpret_cast<char*> (bin.data());
+                rapidjson::Document nextJson;
+                nextJson.Parse(buf);
 
                 ItemCollection ic(nextJson, nextAbsPath, m_connector,
                     m_validate);

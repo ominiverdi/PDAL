@@ -81,7 +81,7 @@ class PDAL_DLL StacReader : public Reader, public Streamable
         void handleItem(const rapidjson::Document& stacJson, std::string itemPath);
         // void handleCatalog(NL::json stacJson, std::string catPath);
         // void handleCollection(NL::json stacJson, std::string colPath);
-        // void handleItemCollection(NL::json stacJson, std::string icPath);
+        void handleItemCollection(const rapidjson::Document& stacJson, std::string icPath);
         void initializeArgs();
         void setConnectionForwards(StringMap& headers, StringMap& query);
 

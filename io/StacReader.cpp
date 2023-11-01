@@ -52,7 +52,7 @@
 
 #include "private/stac/Item.hpp"
 // #include "private/stac/Collection.hpp"
-// #include "private/stac/ItemCollection.hpp"
+#include "private/stac/ItemCollection.hpp"
 
 #include "private/connector/Connector.hpp"
 #include <pdal/StageWrapper.hpp>
@@ -83,7 +83,7 @@ public:
     std::unique_ptr<Item::Filters> m_itemFilters;
     // std::unique_ptr<Catalog::Filters> m_catFilters;
     // std::unique_ptr<Collection::Filters> m_colFilters;
-    // std::unique_ptr<ItemCollection::Filters> m_icFilters;
+    std::unique_ptr<ItemCollection::Filters> m_icFilters;
 };
 
 struct StacReader::Args
@@ -290,19 +290,19 @@ void StacReader::handleItem(const rapidjson::Document& stacJson, std::string ite
 //     printErrors(c);
 // }
 
-// void StacReader::handleItemCollection(NL::json stacJson, std::string icPath)
-// {
-//     ItemCollection ic(stacJson, icPath, *m_p->m_connector,
-//             m_args->validateSchema);
+void StacReader::handleItemCollection(const rapidjson::Document& stacJson, std::string icPath)
+{
+    ItemCollection ic(stacJson, icPath, *m_p->m_connector,
+            m_args->validateSchema);
 
-//     if (ic.init(*m_p->m_icFilters, m_args->rawReaderArgs, m_args->schemaUrls))
-//     {
-//         for (const auto& item: ic.items())
-//         {
-//             addItem(*item);
-//         }
-//     }
-// }
+    if (ic.init(*m_p->m_icFilters, m_args->readerArgs, m_args->schemaUrls))
+    {
+        for (const auto& item: ic.items())
+        {
+            addItem(*item);
+        }
+    }
+}
 
 void addKeys(rapidjson::Value& argSet, const NL::json& argsNl, rapidjson::Document::AllocatorType& a)
 {
@@ -378,7 +378,7 @@ void StacReader::initializeArgs()
     m_p->m_itemFilters = std::make_unique<Item::Filters>();
     // m_p->m_catFilters = std::make_unique<Catalog::Filters>();
     // m_p->m_colFilters = std::make_unique<Catalog::Filters>();
-    // m_p->m_icFilters = std::make_unique<ItemCollection::Filters>();
+    m_p->m_icFilters = std::make_unique<ItemCollection::Filters>();
 
     if (!m_args->items.empty())
     {
@@ -498,7 +498,7 @@ void StacReader::initializeArgs()
     // m_p->m_catFilters->itemFilters = m_p->m_itemFilters.get();
     // m_p->m_catFilters->colFilters = m_p->m_colFilters.get();
 
-    // m_p->m_icFilters->itemFilters = m_p->m_itemFilters.get();
+    m_p->m_icFilters->itemFilters = m_p->m_itemFilters.get();
 
 }
 
@@ -540,9 +540,9 @@ void StacReader::initialize()
 
     auto bin = m_p->m_connector->getBinary(m_filename);
     const char* stacBuf = reinterpret_cast<char*> (bin.data());
-    rapidjson::Document d;
-    d.Parse(stacBuf);
-    std::string stacType = valueAt(d, "type").GetString();
+    rapidjson::Document stacJson;
+    stacJson.Parse(stacBuf);
+    std::string stacType(valueAt(stacJson, "type").GetString());
     // Value* stactype = Pointer("/type").Get(d);
     // Value* stactype2 = Pointer("/type").Get(d);
 
@@ -551,13 +551,13 @@ void StacReader::initialize()
     // std::string stacType = (d["type"]).Get<std::string>();
 
     if (stacType == "Feature")
-        handleItem(d, m_filename);
+        handleItem(stacJson, m_filename);
     // else if (stacType == "Catalog")
     //     handleCatalog(stacJson, m_filename);
     // else if (stacType == "Collection")
     //     handleCollection(stacJson, m_filename);
-    // else if (stacType == "FeatureCollection")
-    //     handleItemCollection(stacJson, m_filename);
+    else if (stacType == "FeatureCollection")
+        handleItemCollection(stacJson, m_filename);
     // else
     //     throw pdal_error("Could not initialize STAC object of type " + stacType);
 
