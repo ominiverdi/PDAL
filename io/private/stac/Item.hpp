@@ -76,6 +76,7 @@ public:
         DatePairs datePairs;
         std::vector<std::string> assetNames;
         std::vector<RegEx> collections;
+        SpatialReference stacSrs;
     };
 
     bool init(const Filters& filters, rapidjson::Value& readerArgs, SchemaUrls schemaUrls);
@@ -112,11 +113,11 @@ private:
 
     bool filter(const Filters& filters);
     bool filterAssets(const std::vector<std::string> &assetNames);
-    bool filterIds(const std::vector<RegEx> &ids);
-    bool filterCol(const std::vector<RegEx> &ids);
+    bool filterIds(std::vector<RegEx> ids);
+    bool filterCol(std::vector<RegEx> ids);
     bool filterDates(const DatePairs &dates);
     bool filterProperties(const NL::json& filterProps);
-    bool filterBounds(const BOX3D &bounds, const SpatialReference &srs);
+    bool filterBounds(const BOX3D &bounds, const SpatialReference &srs, const SpatialReference &stacSrs);
 
 
 };

@@ -145,6 +145,11 @@ std::string Item::extractDriverFromItem(const rapidjson::Value& asset) const
                 return ct.second;
     }
 
+    // Try to guess from the path
+    std::string driver = m_factory.inferReaderDriver(dataUrl);
+    if (driver.size())
+        return driver;
+
     if (!FileUtils::fileExists(dataUrl))
     {
         // Use this to test if dataUrl is a valid endpoint
@@ -167,10 +172,6 @@ std::string Item::extractDriverFromItem(const rapidjson::Value& asset) const
         }
     }
 
-    // Try to guess from the path
-    std::string driver = m_factory.inferReaderDriver(dataUrl);
-    if (driver.size())
-        return driver;
 
     return output;
 }
@@ -313,14 +314,14 @@ bool Item::filter(const Filters& filters)
     if (!filterProperties(filters.properties))
         return false;
 
-    if (!filterBounds(filters.bounds, filters.srs))
+    if (!filterBounds(filters.bounds, filters.srs, filters.stacSrs))
         return false;
 
 
     return true;
 }
 
-bool Item::filterBounds(const BOX3D &bounds, const SpatialReference& srs)
+bool Item::filterBounds(const BOX3D &bounds, const SpatialReference& srs, const SpatialReference& stacSrs)
 {
     if (bounds.empty())
         return true;
@@ -328,7 +329,6 @@ bool Item::filterBounds(const BOX3D &bounds, const SpatialReference& srs)
     //Skip bbox altogether and stick with geometry, which will be much
     //more descriptive than bbox
     Polygon stacPolygon;
-    const SpatialReference stacSrs("EPSG:4326");
     auto bbox = m_json.FindMember("bbox");
     if (bbox != m_json.MemberEnd())
     {
@@ -509,11 +509,11 @@ bool Item::filterAssets(const std::vector<std::string> &assetNames)
 }
 
 // If STAC ID matches any ID in supplied list, it will be accepted
-bool Item::filterIds(const std::vector<RegEx> &ids)
+bool Item::filterIds(std::vector<RegEx> ids)
 {
     if (!ids.empty())
     {
-        for (const auto& id: ids)
+        for (auto& id: ids)
             if (std::regex_match(m_id, id.regex()))
                 return true;
         return false;
@@ -521,7 +521,7 @@ bool Item::filterIds(const std::vector<RegEx> &ids)
     return true;
 }
 
-bool Item::filterCol(const std::vector<RegEx> &ids)
+bool Item::filterCol(std::vector<RegEx> ids)
 {
     if (!ids.empty())
     {
@@ -529,7 +529,7 @@ bool Item::filterCol(const std::vector<RegEx> &ids)
             return false;
 
         const std::string colId = valueAt(m_json, "collection").GetString();
-        for (const auto& id: ids)
+        for (auto& id: ids)
             if (std::regex_match(colId, id.regex()))
                 return true;
 

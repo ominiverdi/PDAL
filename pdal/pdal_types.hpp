@@ -85,7 +85,7 @@ struct RegEx{
         return false;
     }
 
-    const std::regex &regex() { return std::regex(m_str); }
+    std::regex regex() { return std::regex(m_str); }
 
     std::string str() { return m_str; }
 

@@ -376,6 +376,7 @@ void StacReader::initializeArgs()
     handleReaderArgs(m_args->rawReaderArgs, m_args->readerArgs);
 
     m_p->m_itemFilters = std::make_unique<Item::Filters>();
+    m_p->m_itemFilters->stacSrs = SpatialReference("EPSG:4326");
     // m_p->m_catFilters = std::make_unique<Catalog::Filters>();
     // m_p->m_colFilters = std::make_unique<Catalog::Filters>();
     m_p->m_icFilters = std::make_unique<ItemCollection::Filters>();
