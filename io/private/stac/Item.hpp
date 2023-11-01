@@ -61,7 +61,7 @@ class Item
 {
 
 public:
-    Item(const rapidjson::Document& json,
+    Item(const rapidjson::Value& json,
         const std::string& itemPath,
         const connector::Connector& connector,
         bool validate);
@@ -88,7 +88,7 @@ public:
 
 private:
 
-    const rapidjson::Document& m_json;
+    const rapidjson::Value& m_json;
     const std::string m_path;
 
     const connector::Connector& m_connector;

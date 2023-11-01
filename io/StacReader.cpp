@@ -42,11 +42,6 @@
 #include <arbiter/arbiter.hpp>
 #include <nlohmann/json.hpp>
 #include <schema-validator/json-schema.hpp>
-#include "rapidjson/document.h"
-#include "rapidjson/pointer.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/filereadstream.h"
 
 #include <pdal/util/ThreadPool.hpp>
 #include <pdal/util/ProgramArgs.hpp>
@@ -55,8 +50,9 @@
 #include <pdal/util/FileUtils.hpp>
 
 
-#include "private/stac/Collection.hpp"
-#include "private/stac/ItemCollection.hpp"
+#include "private/stac/Item.hpp"
+// #include "private/stac/Collection.hpp"
+// #include "private/stac/ItemCollection.hpp"
 
 #include "private/connector/Connector.hpp"
 #include <pdal/StageWrapper.hpp>
@@ -85,9 +81,9 @@ public:
 
     //filters
     std::unique_ptr<Item::Filters> m_itemFilters;
-    std::unique_ptr<Catalog::Filters> m_catFilters;
-    std::unique_ptr<Collection::Filters> m_colFilters;
-    std::unique_ptr<ItemCollection::Filters> m_icFilters;
+    // std::unique_ptr<Catalog::Filters> m_catFilters;
+    // std::unique_ptr<Collection::Filters> m_colFilters;
+    // std::unique_ptr<ItemCollection::Filters> m_icFilters;
 };
 
 struct StacReader::Args
@@ -216,42 +212,41 @@ void StacReader::addItem(Item& item)
 
 void StacReader::handleItem(const rapidjson::Document& stacJson, std::string itemPath)
 {
-    Item item(stacJson, m_filename, *m_p->m_connector,
-        m_args->validateSchema);
+    Item item(stacJson, m_filename, *m_p->m_connector, m_args->validateSchema);
     if (item.init(*m_p->m_itemFilters, m_args->readerArgs, m_args->schemaUrls))
         addItem(item);
 }
 
-void StacReader::printErrors(Catalog& c)
-{
-    ErrorList errors = c.errors();
-    if (errors.size())
-    {
-        for (auto& p: errors)
-        {
-            log()->get(LogLevel::Error) << "Failure fetching '" << p.first
-                << "' with error '" << p.second << "'\n";
-        }
-        throw pdal_error("Errors found during initial processing of the Catalog.");
-    }
-}
+// void StacReader::printErrors(Catalog& c)
+// {
+//     ErrorList errors = c.errors();
+//     if (errors.size())
+//     {
+//         for (auto& p: errors)
+//         {
+//             log()->get(LogLevel::Error) << "Failure fetching '" << p.first
+//                 << "' with error '" << p.second << "'\n";
+//         }
+//         throw pdal_error("Errors found during initial processing of the Catalog.");
+//     }
+// }
 
-void StacReader::handleNested(Catalog& c)
-{
-    auto& subs = c.subs();
-    for (auto& sub: subs)
-    {
-        //add sub col/cat ids to list for metadata bookkeeping
-        if (sub->type() == GroupType::catalog)
-            m_p->m_catList.push_back(sub->id());
-        else if (sub->type() == GroupType::collection)
-            m_p->m_colList.push_back(sub->id());
+// void StacReader::handleNested(Catalog& c)
+// {
+//     auto& subs = c.subs();
+//     for (auto& sub: subs)
+//     {
+//         //add sub col/cat ids to list for metadata bookkeeping
+//         if (sub->type() == GroupType::catalog)
+//             m_p->m_catList.push_back(sub->id());
+//         else if (sub->type() == GroupType::collection)
+//             m_p->m_colList.push_back(sub->id());
 
-        //collect items from sub catalogs
-        for (const auto& item: sub->items())
-            addItem(*item);
-    }
-}
+//         //collect items from sub catalogs
+//         for (const auto& item: sub->items())
+//             addItem(*item);
+//     }
+// }
 
 
 // void StacReader::handleCatalog(NL::json stacJson, std::string catPath)
@@ -324,15 +319,17 @@ void addKeys(rapidjson::Value& argSet, const NL::json& argsNl, rapidjson::Docume
     }
 }
 
-const rapidjson::Value handleReaderArgs(const NL::json& rawReaderArgs)
+void handleReaderArgs(const NL::json& rawReaderArgs, rapidjson::Value& args)
 {
-    using namespace rapidjson;
     using namespace StacUtils;
 
     Document d;
+    d.SetObject();
     Document::AllocatorType a = d.GetAllocator();
-    Value args;
-    args.SetObject();
+    // Value args;
+    // args.SetObject();
+    if (rawReaderArgs.empty())
+        return;
 
     if (rawReaderArgs.is_object())
     {
@@ -341,11 +338,10 @@ const rapidjson::Value handleReaderArgs(const NL::json& rawReaderArgs)
         const std::string& driver = StacUtils::jsonValue<std::string>(rawReaderArgs, "type");
 
         Value typeVal(driver.c_str(), driver.size(), a);
-        Value key(kObjectType);
+        Value key;
+        key.SetObject();
         addKeys(key, rawReaderArgs, a);
         args.AddMember(typeVal, key, a);
-
-        std::string driver = rawReaderArgs.at("type").get<std::string>();
     }
     else if (rawReaderArgs.is_array())
     {
@@ -355,35 +351,34 @@ const rapidjson::Value handleReaderArgs(const NL::json& rawReaderArgs)
 
         for (const NL::json& readerPipeline: rawReaderArgs)
         {
-            std::string driver = rawReaderArgs.at("type").get<std::string>();
             const std::string &driver = StacUtils::jsonValue<std::string>(readerPipeline, "type");
             if (args.HasMember(driver.c_str()))
                 throw pdal_error("Multiple instances of the same driver in"
                     " supplied reader arguments.");
 
             Value typeVal(driver.c_str(), driver.size(), a);
-            Value key(kObjectType);
+            Value key;
+            key.SetObject();
             addKeys(key, rawReaderArgs, a);
             args.AddMember(typeVal, key, a);
-
-            std::string driver = rawReaderArgs.at("type").get<std::string>();
         }
-        return args;
     }
     else
     {
         throw pdal_error("Invalid Reader args, must be either an "
             "object or an array of objects." + rawReaderArgs.dump());
     }
-
 }
 
 void StacReader::initializeArgs()
 {
+    m_args->readerArgs.SetObject();
+    handleReaderArgs(m_args->rawReaderArgs, m_args->readerArgs);
+
     m_p->m_itemFilters = std::make_unique<Item::Filters>();
-    m_p->m_catFilters = std::make_unique<Catalog::Filters>();
-    m_p->m_colFilters = std::make_unique<Catalog::Filters>();
-    m_p->m_icFilters = std::make_unique<ItemCollection::Filters>();
+    // m_p->m_catFilters = std::make_unique<Catalog::Filters>();
+    // m_p->m_colFilters = std::make_unique<Catalog::Filters>();
+    // m_p->m_icFilters = std::make_unique<ItemCollection::Filters>();
 
     if (!m_args->items.empty())
     {
@@ -400,7 +395,7 @@ void StacReader::initializeArgs()
             "Selecting Catalogs with ids: " << std::endl;
         for (auto& id: m_args->catalogs)
             log()->get(LogLevel::Debug) << "    " << id.m_str << std::endl;
-        m_p->m_catFilters->ids = m_args->catalogs;
+        // m_p->m_catFilters->ids = m_args->catalogs;
     }
 
     if (!m_args->collections.empty())
@@ -410,7 +405,7 @@ void StacReader::initializeArgs()
         for (auto& id: m_args->collections)
             log()->get(LogLevel::Debug) << "    " << id.m_str << std::endl;
         m_p->m_itemFilters->collections = m_args->collections;
-        m_p->m_colFilters->ids = m_args->collections;
+        // m_p->m_colFilters->ids = m_args->collections;
     }
 
 
@@ -498,12 +493,12 @@ void StacReader::initializeArgs()
         log()->get(LogLevel::Debug) <<
             "JSON Schema validation flag is set." << std::endl;
 
-    m_p->m_colFilters->itemFilters = m_p->m_itemFilters.get();
+    // m_p->m_colFilters->itemFilters = m_p->m_itemFilters.get();
 
-    m_p->m_catFilters->itemFilters = m_p->m_itemFilters.get();
-    m_p->m_catFilters->colFilters = m_p->m_colFilters.get();
+    // m_p->m_catFilters->itemFilters = m_p->m_itemFilters.get();
+    // m_p->m_catFilters->colFilters = m_p->m_colFilters.get();
 
-    m_p->m_icFilters->itemFilters = m_p->m_itemFilters.get();
+    // m_p->m_icFilters->itemFilters = m_p->m_itemFilters.get();
 
 }
 
@@ -543,10 +538,11 @@ void StacReader::initialize()
 
     initializeArgs();
 
-    const char* stacBuf = reinterpret_cast<char*> (m_p->m_connector->getBinary(m_filename).data());
+    auto bin = m_p->m_connector->getBinary(m_filename);
+    const char* stacBuf = reinterpret_cast<char*> (bin.data());
     rapidjson::Document d;
     d.Parse(stacBuf);
-    std::string stacType = jsonValue<std::string>(d, "type");
+    std::string stacType = valueAt(d, "type").GetString();
     // Value* stactype = Pointer("/type").Get(d);
     // Value* stactype2 = Pointer("/type").Get(d);
 

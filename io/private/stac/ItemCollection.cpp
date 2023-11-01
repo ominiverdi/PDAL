@@ -59,31 +59,31 @@ const ItemList& ItemCollection::items()
     return m_itemList;
 }
 
-bool ItemCollection::init(const Filters& filters, NL::json rawReaderArgs,
+bool ItemCollection::init(const Filters& filters, rapidjson::Value& readerArgs,
     SchemaUrls schemaUrls)
 {
-    const std::vector<NL::json> &itemList = stacValue<NL::json::array_t>(m_json, "features");
-    for (const NL::json& itemJson: itemList)
+    const Value::Array itemList = jsonValue<Value::Array>(m_json, "features");
+    for (const Value& itemJson: itemList)
     {
         std::shared_ptr<Item> item(new Item(itemJson, m_path, m_connector, m_validate));
         // Item item(itemJson, m_path, m_connector, m_validate);
-        bool valid = item->init(*filters.itemFilters, rawReaderArgs, schemaUrls);
+        bool valid = item->init(*filters.itemFilters, readerArgs, schemaUrls);
         if (valid)
         {
             m_itemList.push_back(item);
         }
     }
-    if (m_json.contains("links"))
+    auto lit = m_json.findMember("links");
+    if (lit != )
     {
-        const NL::json &links = stacValue(m_json, "links");
+        const Value &links = valueAt(m_json, "links");
         for (const NL::json& link: links)
         {
-            const std::string &target = stacValue<std::string>(
-                link, "rel", m_json);
+            const std::string &target = jsonValue<std::string>(link, "rel");
             if (target == "next")
             {
-                const std::string &nextLinkPath = stacValue<std::string>(
-                    link, "href", m_json);
+                const std::string &nextLinkPath = jsonValue<std::string>(
+                    link, "href");
                 std::string nextAbsPath =
                     handleRelativePath(m_path, nextLinkPath);
                 NL::json nextJson = m_connector.getJson(nextAbsPath);
@@ -91,7 +91,7 @@ bool ItemCollection::init(const Filters& filters, NL::json rawReaderArgs,
                 ItemCollection ic(nextJson, nextAbsPath, m_connector,
                     m_validate);
 
-                if (ic.init(filters, rawReaderArgs, schemaUrls))
+                if (ic.init(filters, readerArgs, schemaUrls))
                     for (auto& item: ic.items())
                         m_itemList.push_back(std::move(item));
             }

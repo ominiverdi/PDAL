@@ -68,6 +68,20 @@ std::string handleRelativePath(std::string srcPath, std::string linkPath)
 
 }
 
+std::string handleRelativePath(std::string srcPath, char *linkPath)
+{
+    //Make absolute path of current item's directory, then create relative path from that
+
+    //Get driectory of src item
+    const std::string baseDir = FileUtils::getDirectory(srcPath);
+    if (FileUtils::isAbsolutePath(linkPath))
+        return linkPath;
+    //Create absolute path from src item filepath, if it's not already
+    // and join relative path to src item's dir path
+    return FileUtils::toAbsolutePath(linkPath, baseDir);
+
+}
+
 std::time_t getStacTime(std::string in)
 {
     std::istringstream dateStr(in);
@@ -79,19 +93,19 @@ std::time_t getStacTime(std::string in)
     return std::mktime(&date);
 }
 
-const std::string &stacId(const rapidjson::Document& stac)
+const std::string stacId(const rapidjson::Value& stac)
 {
     auto id = stac.FindMember("id");
 
     if (id == stac.MemberEnd())
         throw pdal_error("Missing required key 'id'.");
-    if (!id->value.IsString()){}
+    if (!id->value.IsString())
         throw pdal_error("Required key 'id' is not of type 'string'. ");
 
     return id->value.GetString();
 }
 
-const std::string &stacType(const rapidjson::Document& stac)
+const std::string stacType(const rapidjson::Value& stac)
 {
     auto t = stac.FindMember("type");
 
@@ -103,25 +117,41 @@ const std::string &stacType(const rapidjson::Document& stac)
     return t->value.GetString();
 }
 
-const std::string &icSelfPath(const NL::json& json)
+const Value& valueAt(const Value& stac, std::string key)
 {
+    const Value::ConstMemberIterator vit = stac.FindMember(key.c_str());
+    if (vit == stac.MemberEnd())
+        throw pdal_error("Missing key '"+key+"' in object: " + stac.GetString());
     try
     {
-        const NL::json links = jsonValue(json, "links");
-        for (const NL::json& link: links)
-        {
-            const std::string &target = jsonValue<std::string>(link, "rel");
-            if (target == "self")
-                return jsonValue<std::string>(link, "href");
-        }
+        return vit->value;
     }
-    catch(std::runtime_error& e)
+    catch (const std::exception &e)
     {
-        return "";
+        throw stac_error(e.what());
     }
 
-    return "";
 }
+
+// const std::string &icSelfPath(const NL::json& json)
+// {
+//     try
+//     {
+//         const NL::json links = jsonValue(json, "links");
+//         for (const NL::json& link: links)
+//         {
+//             const std::string &target = jsonValue<std::string>(link, "rel");
+//             if (target == "self")
+//                 return jsonValue<std::string>(link, "href");
+//         }
+//     }
+//     catch(std::runtime_error& e)
+//     {
+//         return "";
+//     }
+
+//     return "";
+// }
 
 
 }//StacUtils

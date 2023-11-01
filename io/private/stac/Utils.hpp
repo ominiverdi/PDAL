@@ -58,6 +58,13 @@ namespace stac
     typedef std::vector<std::shared_ptr<Catalog>> SubList;
     typedef std::deque<std::pair<std::time_t, std::time_t>> DatePairs;
 
+    // rapidjson value types
+    typedef rapidjson::Value::ValueType::Ch* StringRefType;
+    typedef rapidjson::Value::ValueType::Object ObjectType;
+    typedef rapidjson::Value::ValueType::ConstObject ConstObjectType;
+    typedef rapidjson::Value::ValueType::Array ArrayType;
+    typedef rapidjson::Value::ValueType::ConstArray ConstArrayType;
+
     enum GroupType
     {
         catalog,
@@ -70,26 +77,41 @@ namespace stac
 
 namespace StacUtils
 {
-    using namespace rapidjson;
+    using Value = rapidjson::Value;
+    using Document = rapidjson::Document;
 
     std::string handleRelativePath(std::string srcPath, std::string linkPath);
     std::time_t getStacTime(std::string in);
-    const std::string &stacId(const rapidjson::Document& stac);
-    const std::string &stacType(const rapidjson::Document& stac);
-    const std::string &icSelfPath(const rapidjson::Document& json);
+    const std::string stacId(const rapidjson::Value& stac);
+    const std::string stacType(const rapidjson::Value& stac);
+    const std::string &icSelfPath(const rapidjson::Value& json);
+    const Value& valueAt(const Value& stac, std::string key);
 
-    template <class S = rapidjson::Value::Object>
-    const S jsonValue(const Value& stac, std::string key = "")
+
+    template <class S = ObjectType>
+    const S jsonValue(const Value& stac, std::string key)
     {
-        if (key.empty())
-            return stac.Get<S>();
-
-        const GenericMemberIterator vit = stac.FindMember(key);
+        const Value::ConstMemberIterator vit = stac.FindMember(key.c_str());
         if (vit == stac.MemberEnd())
             throw pdal_error("Missing key '"+key+"' in object: " + stac.GetString());
         try
         {
             return vit->value.Get<S>();
+            // return vit->value.Get<S>(vit->value);
+        }
+        catch (const std::exception &e)
+        {
+            throw stac_error(e.what());
+        }
+
+    }
+
+    template <class S = ObjectType>
+    const S jsonValue(const Value& stac)
+    {
+        try
+        {
+            return stac.Get<S>();
         }
         catch (const std::exception &e)
         {
@@ -101,46 +123,41 @@ namespace StacUtils
     template <class T = NL::json::object_t>
     inline const T &jsonValue(const NL::json& json, std::string key = "")
     {
-        if (key.empty())
-            return stac.Get<T>();
-
-        const auto vit = stac.FindMember(key)
-        if (vit == stac.MemberEnd())
-            throw pdal_error("Missing key '"+key+"' in object: " + stac.GetString());
-        try
-        {
-            return stac[key].Get<T>();
+        try {
+            if (key.empty())
+                return json.get_ref<const T&>();
+            return json.at(key).get_ref<const T&>();
         }
-        catch (const std::exception &e)
+        catch (NL::detail::exception& e)
         {
             throw stac_error(e.what());
         }
     }
 
-    template <typename AddType>
-    void addMember(Value& obj, std::string name, AddType& v, Document::AllocatorType& al)
-    {
-        if (typeid(v) == typeid(std::string))
-        {
-            Value key(name.c_str(), name.size(), al);
-            Value val(v.c_str(), v.size(), al);
-            obj.AddMember(key, val, al);
-        }
-        else
-        {
-            Value key(name.c_str(), name.size(), al);
-            Value val(v, v.size(), al);
-            obj.AddMember(key, val, al);
-        }
+    // template <typename AddType>
+    // void addMember(Value& obj, std::string name, AddType& v, Document::AllocatorType& al)
+    // {
+    //     if (typeid(v) == typeid(std::string))
+    //     {
+    //         Value key(name.c_str(), name.size(), al);
+    //         Value val(v.c_str(), v.size(), al);
+    //         obj.AddMember(key, val, al);
+    //     }
+    //     else
+    //     {
+    //         Value key(name.c_str(), name.size(), al);
+    //         Value val(v, v.size(), al);
+    //         obj.AddMember(key, val, al);
+    //     }
 
-    }
+    // }
 
-    void addMember(Value& obj, std::string name, std::string& v, Document::AllocatorType& al)
-    {
-        Value key(name.c_str(), name.size(), al);
-        Value val(v.c_str(), v.size(), al);
-        obj.AddMember(key, val, al);
-    }
+    // void addMember(Value& obj, std::string name, std::string& v, Document::AllocatorType& al)
+    // {
+    //     Value key(name.c_str(), name.size(), al);
+    //     Value val(v.c_str(), v.size(), al);
+    //     obj.AddMember(key, val, al);
+    // }
 
     // template <class U = NL::json::object_t>
     // inline const U &stacValue(const NL::json& stac, std::string key = "",

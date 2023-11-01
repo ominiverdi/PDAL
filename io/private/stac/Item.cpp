@@ -46,7 +46,7 @@ namespace stac
 
 using namespace StacUtils;
 
-Item::Item(const rapidjson::Document& json,
+Item::Item(const rapidjson::Value& json,
         const std::string& itemPath,
         const connector::Connector& connector,
         bool validate):
@@ -99,9 +99,10 @@ Options Item::setReaderOptions(const rapidjson::Value& readerArgs,
     const std::string& driver) const
 {
     Options readerOptions;
-    if (readerArgs.HasMember(driver.c_str())) {
-        const rapidjson::Value &args = jsonValue(readerArgs, driver);
-        for (auto & arg: args.GetObject())
+    const char* cstr = driver.c_str();
+    if (readerArgs.HasMember(cstr)) {
+        const ConstObjectType args = jsonValue<ConstObjectType>(readerArgs, driver);
+        for (auto & arg: args)
         {
 
             std::string key = arg.name.GetString();
@@ -133,12 +134,12 @@ std::string Item::extractDriverFromItem(const rapidjson::Value& asset) const
         { "application/vnd.laszip+copc", "readers.copc"}
     };
 
-    const std::string &assetPath = jsonValue<std::string>(asset, "href");
-    std::string dataUrl = handleRelativePath(m_path, assetPath);
+    const char* assetPath = jsonValue<const char*>(asset, "href");
+    std::string dataUrl = handleRelativePath(m_path, std::string(assetPath));
 
     if (asset.HasMember("type"))
     {
-        const std::string &contentType = jsonValue<std::string>(asset, "type");
+        const char* contentType = jsonValue<const char*>(asset, "type");
         for(const auto& ct: contentTypes)
             if (Utils::iequals(ct.first, contentType))
                 return ct.second;
@@ -221,12 +222,22 @@ std::string Item::extractDriverFromItem(const rapidjson::Value& asset) const
 //     }
 // }
 
-void validateForFilter(const rapidjson::Document &json)
+void validateForFilter(const rapidjson::Value &json)
 {
-    // stacId(json);
-    jsonValue(json, "assets");
-    jsonValue(json, "properties");
-    jsonValue(json, "geometry");
+    auto idit = json.FindMember("id");
+    if (idit == json.MemberEnd())
+        throw stac_error("Missing required key 'id'");
+    std::string id = idit->value.GetString();
+
+    if (!json.HasMember("properties"))
+        throw stac_error(id, "item", "Missing required key 'properties'");
+
+    if (!json.HasMember("assets"))
+        throw stac_error(id, "item", "Missing required key 'assets'");
+
+    if (!json.HasMember("geometry"))
+        throw stac_error(id, "item", "Missing required key 'geometry'");
+
 }
 
 bool matchProperty(std::string key, NL::json val, const Value &stacVal,
@@ -236,8 +247,10 @@ bool matchProperty(std::string key, NL::json val, const Value &stacVal,
     {
         case NL::detail::value_t::string:
         {
-            const std::string &value = jsonValue<std::string>(stacVal);
-            const std::string &desired = jsonValue<std::string>(val);
+            // const std::string value(jsonValue<Value::ValueType::Ch*>(stacVal));
+            // const std::string desired(jsonValue<Value::ValueType::Ch*>(val));
+            const std::string value(stacVal.GetString());
+            const std::string desired = jsonValue<std::string>(val);
             return value == desired;
             break;
         }
@@ -349,7 +362,7 @@ bool Item::filterBounds(BOX3D bounds, SpatialReference srs)
     {
         //If stac item has null geometry and bounds have been included
         //for filtering, then the Item will be excluded.
-        const std::string geometry = jsonValue<std::string>(m_json, "geometry");
+        const char *geometry = valueAt(m_json, "geometry").GetString();
         // if (geometry.type() == NL::detail::value_t::null)
         //     return false;
 
@@ -383,7 +396,7 @@ bool Item::filterBounds(BOX3D bounds, SpatialReference srs)
 
 bool Item::filterProperties(const NL::json& filterProps)
 {
-    const Value itemProperties = jsonValue<Value>(m_json, "properties");
+    const Value &itemProperties = valueAt(m_json, "properties");
 
     if (!filterProps.empty())
     {
@@ -391,8 +404,7 @@ bool Item::filterProperties(const NL::json& filterProps)
         {
             std::string key = it.key();
 
-            // itemProperties[key].Get<Value>();
-            const Value stacVal = jsonValue<Value>(itemProperties, key);
+            const Value &stacVal = valueAt(itemProperties, key);
 
             NL::json filterVal = it.value();
             NL::detail::value_t filterType = filterVal.type();
@@ -417,7 +429,7 @@ bool Item::filterProperties(const NL::json& filterProps)
 
 bool Item::filterDates(DatePairs dates)
 {
-    const Value &properties = jsonValue(m_json, "properties");
+    const Value &properties = valueAt(m_json, "properties");
 
     // DateTime
     // If STAC datetime fits in *any* of the supplied ranges,
@@ -427,7 +439,7 @@ bool Item::filterDates(DatePairs dates)
         if (properties.HasMember("datetime") &&
             !properties["datetime"].IsNull())
         {
-            const std::string stacDateStr = jsonValue<std::string>(properties, "datetime");
+            const char* stacDateStr = valueAt(properties, "datetime").GetString();
 
             try
             {
@@ -447,10 +459,10 @@ bool Item::filterDates(DatePairs dates)
             properties.HasMember("end_datetime"))
         {
                 // Handle if STAC object has start and end datetimes instead of one
-                const std::string endDateStr = jsonValue<std::string>(properties,
-                    "end_datetime");
-                const std::string startDateStr = jsonValue<std::string>(properties,
-                    "end_datetime");
+                const std::string endDateStr = valueAt(properties,
+                    "end_datetime").GetString();
+                const std::string startDateStr = valueAt(properties,
+                    "end_datetime").GetString();
 
                 std::time_t stacEndTime = getStacTime(endDateStr);
                 std::time_t stacStartTime = getStacTime(startDateStr);
@@ -480,14 +492,14 @@ bool Item::filterDates(DatePairs dates)
 
 bool Item::filterAssets(std::vector<std::string> assetNames)
 {
-    const rapidjson::Value assetList = jsonValue<Value>(m_json, "assets");
+    const rapidjson::Value &assetList = valueAt(m_json, "assets");
     for (auto& name: assetNames)
     {
         if (assetList.HasMember(name.c_str()))
         {
-            const rapidjson::Value asset = jsonValue<Value>(assetList, name);
+            const rapidjson::Value &asset = valueAt(assetList, name);
             m_driver = extractDriverFromItem(asset);
-            const std::string assetPath = jsonValue<std::string>(asset, "href");
+            const std::string assetPath = valueAt(asset, "href").GetString();
             m_assetPath = handleRelativePath(m_path, assetPath);
         }
     }
@@ -516,7 +528,7 @@ bool Item::filterCol(std::vector<RegEx> ids)
         if (!m_json.HasMember("collection"))
             return false;
 
-        const std::string colId = jsonValue<std::string>(m_json, "collection");
+        const std::string colId = valueAt(m_json, "collection").GetString();
         for (auto& id: ids)
             if (std::regex_match(colId, id.regex()))
                 return true;
