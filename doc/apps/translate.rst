@@ -34,7 +34,7 @@ If provided, the ``--pipeline`` option will write the pipeline constructed
 from the command-line arguments to the specified file.  The translate
 command will not actually run when this argument is given.
 
-The ``--json`` flag can use used to specify a PDAL pipeline from which
+The ``--json`` flag can be used to specify a PDAL pipeline from which
 filters will be extracted.  If a reader or writer exist in the pipeline,
 they will be removed and replaced with the input and output provided on
 the command line.  If a reader/writer stage references tags in the
